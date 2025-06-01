@@ -18,7 +18,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
     },
     price: {
-      type: DataTypes.DECIMAL(10, 2),
+      type: DataTypes.TEXT,
       allowNull: false
     },
     category: {
@@ -34,7 +34,7 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: true
     },
     rating: {
-      type: DataTypes.DECIMAL(2, 1),
+      type: DataTypes.TEXT,
       defaultValue: 0
     }
   }, {

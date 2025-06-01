@@ -6,7 +6,7 @@ const products = [
     id: 1,
     name: "Digital BP Monitor",
     price: 49.99,
-    image: "https://images.unsplash.com/photo-1631549916768-4119b2e5f926",
+    image: "/images/supplements4.avif",
     rating: 4.5,
     category: "Medical Devices",
     description: "Professional grade blood pressure monitor"
