@@ -22,14 +22,16 @@ async function startServer() {
   try {
     await sequelize.authenticate();
     console.log('Database connection established successfully.');
-    sequelize
-    .sync()
-    .then(() => {
-      console.log('✅ Tables created successfully!');
-    })
-    .catch((error) => {
-      console.error('❌ Unable to create tables:', error);
-    });
+    // If you want to create tables, uncomment the following line:
+    // sequelize
+    // .sync()
+    // .then(() => {
+    //   console.log('✅ Tables created successfully!');
+    // })
+    // .catch((error) => {
+    //   console.error('❌ Unable to create tables:', error);
+    // });
+    
     app.listen(port, () => {
       console.log(`Server is running on port: ${port}`);
     });

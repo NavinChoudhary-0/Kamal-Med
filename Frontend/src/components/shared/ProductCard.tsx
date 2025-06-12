@@ -60,7 +60,7 @@ const ProductCard = ({
 
         {/* Price and Add to Cart */}
         <div className="flex items-center justify-between mt-4">
-          <div className="text-xl font-bold text-blue-600">${price.toFixed(2)}</div>
+          <div className="text-xl font-bold text-blue-600">{price}</div>
           <button className="flex items-center space-x-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-200">
             <ShoppingCartIcon className="h-5 w-5" />
             <span>Add to Cart</span>

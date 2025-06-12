@@ -15,10 +15,13 @@ fs
             return;
         }
         if(field === "name"){
-            dataPerFile[field] = file.replace(".jpg", "");
+            dataPerFile[field] = file.split(".")[0];
         }else if(field === "image"){
-            dataPerFile[field] = imagesDir.replace("\\Script/..", "") + file;
-        }else{
+            dataPerFile[field] = "/images/" + file;
+        }else if(field === "category"){
+            dataPerFile[field] = "Health_Devices";
+        }
+        else{
             dataPerFile[field] = "";
         }
     })
