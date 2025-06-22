@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import ProductCard from '../components/shared/ProductCard';
 import Product from '../interfaces/Product';
 import Loading from '../components/shared/Loading';
-import { fetchProducts, fetchProductsFilterByQuery, fetchProductsByCategory } from '../services/ProductService';
+import { fetchProductsFilterByQuery } from '../services/ProductService';
 import { categories } from '../config/AppConstants';
 
 const Products = () => {
@@ -14,11 +14,16 @@ const Products = () => {
   const lastSeenId = useRef<Map<string, number>>(new Map());
   const observer = useRef<IntersectionObserver | null>(null);
   const selectedCategoryRef = useRef(selectedCategory);
+  const searchQueryRef = useRef(searchQuery);
+  const userQueryList = useRef<{ [key: string]: number }>({});
   let filteredProducts: Product[] = [];
   useEffect(() => {
     selectedCategoryRef.current = selectedCategory;
   }, [selectedCategory]);
 
+  useEffect(() => {
+    searchQueryRef.current = searchQuery;
+  }, [searchQuery]);
   // Set initial hasMore and lastseenID values for each category
   useEffect(() => {
     categories.forEach(category => {
@@ -27,34 +32,62 @@ const Products = () => {
     });
   }, []);
 
-  useEffect(() => {
-    let maxValue = 0;
-    products.forEach(product => {
-      maxValue = Math.max(maxValue, Math.max(lastSeenId.current.get(product.category)?? 0, product.id));
-      lastSeenId.current.set(product.category, Math.max(lastSeenId.current.get(product.category)?? 0, product.id));
-    })
-    lastSeenId.current.set("All", maxValue);
-  }, [products])
-
   const lastProductElementRef = useCallback((node: HTMLDivElement | null) => {
     if (loading) return;
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && (hasMoreEachCategorieMap.current.get(selectedCategoryRef.current) ?? true)) {
-        setLoading(true);        
-        fetchProductsFilterByQuery(selectedCategoryRef.current, searchQuery, lastSeenId.current.get(selectedCategoryRef.current) ?? 0)
+      console.log("Yes");
+      
+      if (entries[0].isIntersecting && (hasMoreEachCategorieMap.current.get(selectedCategoryRef.current) ?? true) && userQueryList.current[searchQueryRef.current] !== Number.MAX_SAFE_INTEGER) {
+        setLoading(true);      
+        console.log("Reached end of page");  
+        fetchProductsFilterByQuery(selectedCategoryRef.current, searchQueryRef.current, lastSeenId.current, userQueryList.current)
           .then((newProducts) => {  
-            if(newProducts.length === 0){
-              hasMoreEachCategorieMap.current.set(selectedCategory, false);
-              if(selectedCategory === "All"){
+            if(newProducts.length === 0 && searchQueryRef.current === "" ){
+              hasMoreEachCategorieMap.current.set(selectedCategoryRef.current, false);
+              if(selectedCategoryRef.current === "All"){
                 categories.forEach(category => {
                   hasMoreEachCategorieMap.current.set(category, false);
                 });
               }
             }
-            setProducts([...products, ...newProducts]);
+            let maxi = 0;
+            if(newProducts.length > 0){
+              newProducts.forEach((product: Product) => {
+                maxi = Math.max(maxi, product.id);
+              })
+            } 
+            if(searchQueryRef.current.length > 0){
+              if(newProducts.length < 20){
+                userQueryList.current[searchQueryRef.current] = Number.MAX_SAFE_INTEGER;;
+              }else{
+                userQueryList.current[searchQueryRef.current] = maxi;
+              }
+            }
+            if(searchQueryRef.current === "" && newProducts.length > 0){
+              console.log("maxi", maxi);
+              
+              if(selectedCategoryRef.current === "All"){
+                categories.forEach(category => {
+                  lastSeenId.current.set(category.split(" ").join("_"), Math.max(maxi, lastSeenId.current.get(category.split(" ").join("_"))?? 0));
+                });  
+              }else{
+                lastSeenId.current.set(selectedCategoryRef.current, maxi);
+              }
+            }
+            let newFetchedProducts: Product[] = [];
+            //checking for duplicates
+            if(newProducts.length > 0){
+              newFetchedProducts = newProducts.filter((newProduct: Product) => {
+                return !products.some(product => product.id === newProduct.id);
+              });
+            }
+            console.log("newFetchedProducts", lastSeenId.current);
+            console.log("newFetchedProducts", hasMoreEachCategorieMap.current);
+            console.log("newFetchedProducts", userQueryList.current);
+            setProducts([...products, ...newFetchedProducts]);
+            setLoading(false);
           })
-        setLoading(false);
       }
     });
     if (node) observer.current.observe(node);
@@ -62,9 +95,12 @@ const Products = () => {
 
   useEffect(() => {
     setLoading(true);
-    fetchProductsFilterByQuery(selectedCategory, searchQuery, lastSeenId.current.get(selectedCategory)?? 0)
+    fetchProductsFilterByQuery(selectedCategory, searchQuery, lastSeenId.current, userQueryList.current)
       .then((newProducts) => {
         setProducts(newProducts);
+        categories.forEach(category => {
+          lastSeenId.current.set(category.split(" ").join("_"), 20);
+        });
         setLoading(false);      
       });
   }, [])
@@ -72,18 +108,23 @@ const Products = () => {
   // Filter products based on selected category and search query
   filteredProducts = products.filter(product => {
     const matchesCategory = selectedCategory === "All" || product.category === selectedCategory;
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const regex = new RegExp(`\\b${searchQuery}.*`, 'i'); // 'i' for case-insensitive
+    const matchesSearch = searchQuery.trim() === "" || regex.test(product.name) || regex.test(product.description);
     return matchesCategory && matchesSearch;
   });
-  if(filteredProducts.length === 0 && !loading && hasMoreEachCategorieMap.current.get(selectedCategory)){
+  
+  if(filteredProducts.length === 0 && !loading && hasMoreEachCategorieMap.current.get(selectedCategory) && userQueryList.current[searchQuery] !== Number.MAX_SAFE_INTEGER){
     setLoading(true);
-    fetchProductsFilterByQuery(selectedCategory, searchQuery, lastSeenId.current.get(selectedCategory)?? 0)
+    fetchProductsFilterByQuery(selectedCategory, searchQuery, lastSeenId.current, userQueryList.current)
      .then((newProducts) => {
       if(newProducts.length === 0){
-        hasMoreEachCategorieMap.current.set(selectedCategory, false);
+        userQueryList.current[searchQuery] = Number.MAX_SAFE_INTEGER;
+        
+      }else{
         setProducts([...products,...newProducts]);
-        setLoading(false);
-      }});
+      }
+      setLoading(false);
+    });
   }
 
   return (
@@ -111,7 +152,7 @@ const Products = () => {
           type="text"
           placeholder="Search products..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => setSearchQuery((e.target.value))}
           className="px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
@@ -137,7 +178,7 @@ const Products = () => {
       {/* Loading indicator */}
       {loading && <Loading/>}
        {/* End of list message */}
-       {!loading && !hasMoreEachCategorieMap.current.get(selectedCategory) && products.length > 0 && (
+       {!loading && filteredProducts.length > 0 && !hasMoreEachCategorieMap.current.get(selectedCategory) && products.length > 0 && (
         <div className="flex flex-col items-center justify-center mt-12 mb-8">
           <div className="w-16 h-16 mb-4 relative">
             <div className="absolute inset-0 bg-blue-100 rounded-full opacity-50 animate-ping"></div>
@@ -153,7 +194,7 @@ const Products = () => {
       )}
 
       {/* No products found message */}
-      {!loading && products.length === 0 && (
+      {!loading && filteredProducts.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

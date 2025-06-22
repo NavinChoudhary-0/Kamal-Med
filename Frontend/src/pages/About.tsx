@@ -42,10 +42,9 @@ const About = () => {
         </div>
   
         {/* Team Section */}
-        <div>
+        {/* <div>
           <h2 className="text-3xl font-bold text-gray-900 mb-6">Our Team</h2>
           <div className="grid md:grid-cols-3 gap-8">
-            {/* Add team member cards here */}
             <div className="bg-white p-6 rounded-lg shadow-lg text-center">
               <img
                 src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2"
@@ -55,9 +54,9 @@ const About = () => {
               <h3 className="text-xl font-bold text-gray-900">Dr. Sarah Johnson</h3>
               <p className="text-blue-600">Chief Medical Officer</p>
             </div>
-            {/* Add more team members */}
           </div>
-        </div>
+        </div> */}
+
       </div>
     );
   };
