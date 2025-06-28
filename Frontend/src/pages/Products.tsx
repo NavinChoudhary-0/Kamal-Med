@@ -4,6 +4,15 @@ import Product from '../interfaces/Product';
 import Loading from '../components/shared/Loading';
 import { fetchProductsFilterByQuery } from '../services/ProductService';
 import { categories } from '../config/AppConstants';
+import {useCart} from '../config/CartContext';
+import { useNavigate } from 'react-router-dom';
+
+// SVG Icon for Shopping Cart
+const ShoppingCartIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m0 0h8" />
+  </svg>
+);
 
 const Products = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -17,13 +26,17 @@ const Products = () => {
   const searchQueryRef = useRef(searchQuery);
   const userQueryList = useRef<{ [key: string]: number }>({});
   let filteredProducts: Product[] = [];
+  const { getTotalItems } = useCart();
   useEffect(() => {
     selectedCategoryRef.current = selectedCategory;
   }, [selectedCategory]);
-
+  const navigate = useNavigate();
   useEffect(() => {
     searchQueryRef.current = searchQuery;
   }, [searchQuery]);
+  const onViewCart = () => {
+    navigate("/cart");
+  };
   // Set initial hasMore and lastseenID values for each category
   useEffect(() => {
     categories.forEach(category => {
@@ -129,18 +142,37 @@ const Products = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Our Products</h1>
+      {/* Header with title and cart button */}
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Our Products</h1>
+        
+        {/* View Cart Button */}
+        {onViewCart && (
+          <button
+            onClick={() => onViewCart()}
+            className="relative flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-200 shadow-md hover:shadow-lg"
+          >
+            <ShoppingCartIcon className="h-5 w-5" />
+            <span className="font-medium">View Cart</span>
+            {getTotalItems() > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold min-w-[1.5rem] border-2 border-white">
+                {getTotalItems() > 99 ? '99+' : getTotalItems()}
+              </span>
+            )}
+          </button>
+        )}  
+      </div>
 
       {/* Filters */}
       <div className="flex flex-col md:flex-row justify-between mb-8">
-        <div className="flex space-x-4 mb-4 md:mb-0">
+        <div className="flex flex-wrap gap-2 mb-4 md:mb-0">
           {categories.map(category => (
             <button
               key={category}
               onClick={() => setSelectedCategory(category.split(" ").join("_"))}
-              className={`px-4 py-2 rounded-md ${
+              className={`px-4 py-2 rounded-md transition-colors duration-200 ${
                 selectedCategory === category.split(" ").join("_")
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-blue-600 text-white shadow-md'
                   : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
               }`}
             >
@@ -148,13 +180,23 @@ const Products = () => {
             </button>
           ))}
         </div>
-        <input
-          type="text"
-          placeholder="Search products..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery((e.target.value))}
-          className="px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery((e.target.value))}
+            className="px-4 py-2 pl-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full md:w-80"
+          />
+          <svg 
+            className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
       </div>
 
       {/* Product Grid */}
@@ -163,22 +205,24 @@ const Products = () => {
           if (filteredProducts.length === index + 1) {
             return (
               <div key={product.id} ref={lastProductElementRef}>
-                <ProductCard {...product} />
+                <ProductCard product={product} />
               </div>
             );
           } else {
             return (
               <div key={product.id}>
-                <ProductCard {...product} />
+                <ProductCard product={product} />
               </div>
             );
           }
         })}
       </div>
+      
       {/* Loading indicator */}
       {loading && <Loading/>}
-       {/* End of list message */}
-       {!loading && filteredProducts.length > 0 && !hasMoreEachCategorieMap.current.get(selectedCategory) && products.length > 0 && (
+      
+      {/* End of list message */}
+      {!loading && filteredProducts.length > 0 && !hasMoreEachCategorieMap.current.get(selectedCategory) && products.length > 0 && (
         <div className="flex flex-col items-center justify-center mt-12 mb-8">
           <div className="w-16 h-16 mb-4 relative">
             <div className="absolute inset-0 bg-blue-100 rounded-full opacity-50 animate-ping"></div>
@@ -204,7 +248,6 @@ const Products = () => {
         </div>
       )}
     </div>
-    
   );
 };
 
