@@ -1,6 +1,6 @@
 import { ShoppingCartIcon } from '@heroicons/react/outline';
 import { StarIcon } from '@heroicons/react/solid';
-import { useCart } from '../../config/CartContext';
+import { useCart } from '../../Provider/CartContext';
 interface ProductCardProps {
   product: any;
 }

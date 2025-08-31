@@ -4,7 +4,7 @@ import Product from '../interfaces/Product';
 import Loading from '../components/shared/Loading';
 import { fetchProductsFilterByQuery } from '../services/ProductService';
 import { categories } from '../config/AppConstants';
-import {useCart} from '../config/CartContext';
+import {useCart} from '../Provider/CartContext';
 import { useNavigate } from 'react-router-dom';
 
 // SVG Icon for Shopping Cart
