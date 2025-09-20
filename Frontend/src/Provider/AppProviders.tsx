@@ -1,12 +1,10 @@
 import { CartProvider } from "./CartContext";
-import { UserProvider } from "./UserContext";
+import { UserAuthServicesProvider } from "./UserAuthContext";
 const AppProviders = ({ children }: { children: React.ReactNode }) => {
-    return (
-        <CartProvider>
-           <UserProvider>
-                {children}
-           </UserProvider>
-        </CartProvider>
-    );
-  };
-export default AppProviders;  
+  return (
+    <UserAuthServicesProvider>
+      <CartProvider>{children}</CartProvider>
+    </UserAuthServicesProvider>
+  );
+};
+export default AppProviders;

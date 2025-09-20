@@ -16,10 +16,9 @@ import { GoogleLogin } from "@react-oauth/google";
 import { jwtDecode } from "jwt-decode";
 import { URL_TO_ADD_USER, URL_TO_CHECK_USER_DATA } from "../../config/ApiURL";
 import { useNavigate } from "react-router-dom";
-import { useUser } from "../../Provider/UserContext";
+import { useAuth } from "../../Provider/UserAuthContext";
 import UserInterface from "../../interfaces/User";
 import Order from "../../interfaces/Order";
-import { Z_DATA_ERROR } from "zlib";
 
 interface UserData {
   message: string,
@@ -39,7 +38,7 @@ const LoginInterface = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [successMessage, setSuccessMessage] = useState("");
-  const {user, setLoggedIn, setUser, setOrders} = useUser();
+  const {user, apiClient} = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -172,21 +171,10 @@ const LoginInterface = () => {
 
     try {
       const url = isLogin && !payload.sub ? URL_TO_CHECK_USER_DATA : URL_TO_ADD_USER;
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload.sub ? payload : formData),
-      });
-      const data:UserData = await response.json();
-      if (!response.ok) {
-        throw new Error(data.message);
+      const response  = await apiClient?.login(url, payload.sub? payload : formData);
+      if (!response?.success) {
+        throw new Error(response?.error);
       }
-      console.log("Data = ", data);
-      setLoggedIn(true);
-      setUser({...user, ...data.user});
-      setOrders(data.orders);
       navigate("/products");
     } catch (error) {
       console.log(error);

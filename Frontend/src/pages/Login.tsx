@@ -1,13 +1,13 @@
-import UserInterface from "../components/Authentication/LoginInterface";
+import LoginInterface from "../components/Authentication/LoginInterface";
 import UserHistory from "../components/Authentication/UserInterface";
-import { useUser } from "../Provider/UserContext";
+import { useAuth } from "../Provider/UserAuthContext";
 
 const AuthScreen = () => {
-  const { loggedIn} = useUser();
-  if(loggedIn){
+  const { isAuthenticated } = useAuth();
+  if(isAuthenticated){
     return <UserHistory/>
   }
-  return <UserInterface/>;
+  return <LoginInterface/>;
 };
 
 export default AuthScreen;

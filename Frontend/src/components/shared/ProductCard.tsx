@@ -1,6 +1,9 @@
 import { ShoppingCartIcon } from '@heroicons/react/outline';
 import { StarIcon } from '@heroicons/react/solid';
 import { useCart } from '../../Provider/CartContext';
+import Toast from './Toast';
+import { useState } from 'react'
+import Product from '../../interfaces/Product';
 interface ProductCardProps {
   product: any;
 }
@@ -9,8 +12,34 @@ const ProductCard = ({
   product
 }: ProductCardProps) => {
   const { addToCart } = useCart();
+  const [notification, setNotification] = useState({
+    isVisible: false,
+    message: ''
+  });
+  const addToCartAndShowToast = (product: Product) => {
+    addToCart(product);
+    setNotification({ isVisible: false, message: '' });
+  
+    setTimeout(() => {
+      setNotification({
+        isVisible: true,
+        message: `${product.name} added to cart`
+      });
+    }, 100);
+  };
+  const closeNotification = () => {
+    setNotification({
+      isVisible: false,
+      message: ''
+    });
+  };
   return (
     <div className="group relative bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
+      <Toast 
+        message={notification.message}
+        isVisible={notification.isVisible}
+        onClose={closeNotification}
+      />
       {/* Product Image */}
       <div className="relative w-full h-64">
         <img
@@ -50,7 +79,7 @@ const ProductCard = ({
         <div className="flex items-center justify-between mt-4">
           <div className="text-xl font-bold text-blue-600">{product.price}</div>
             <button className="flex items-center space-x  -1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors duration-200"
-              onClick={ () => addToCart(product)}>
+              onClick={ () => addToCartAndShowToast(product)}>
             <ShoppingCartIcon className="h-5 w-5" />
             <span>Add to Cart</span>
           </button>

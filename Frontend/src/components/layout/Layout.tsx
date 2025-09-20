@@ -1,12 +1,9 @@
-import { ReactNode } from 'react';
 import Navbar from './Navbar';
 import Footer from './Footer';
+import {ReactNodeInterface} from '../../types/index';
 
-interface LayoutProps {
-  children: ReactNode;
-}
 
-const Layout = ({ children }: LayoutProps) => {
+const Layout = ({ children }: ReactNodeInterface) => {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
