@@ -1,0 +1,23 @@
+To connect to backend you could start with node server.js
+To spin up frontend you could start with npm start
+currently trying to add user and failing with some error will debug it today
+
+options request should be cached
+one part of this is backend accepting the domain from which cookie is coming so this is a mutual acceptance frontend decides whether to send the cokkie or not and
+backend decides whether to accept the cookie coming from the domain
+
+Login interface -- login and create user screen
+XSS attacks -cross site scripting attack
+
+verify google sub in the backend using the id that google provides
+
+how to start postgres in case of shutdown
+
+net start postgresql-x64-17 -- run as adminstartion
+
+SELECT table_schema, table_name
+FROM information_schema.tables
+WHERE table_type = 'BASE TABLE'
+AND table_schema NOT IN ('pg_catalog', 'information_schema')
+ORDER BY table_schema, table_name;
+query to check the user created tables in postgreSQL

@@ -8,7 +8,10 @@ require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true,
+})); 
 app.use(express.json());
 
 // Routes
@@ -18,15 +21,30 @@ const authRoute = require("./routes/authRoute");
 // More permissive limiter for general API endpoints
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // higher limit for general API usage
-  message: 'Too many requests, please try again later.'
+  max: 1000,
+  message: 'Too many requests, please try again later.',
+  standardHeaders: true, // Return rate limit info in headers (Ratify spec)
+  legacyHeaders: false, // Disable older X-RateLimit-* headers
+  handler: (req, res, next, options) => {
+    // Log exceeded attempts with IP
+    console.log(`Rate limit exceeded for IP: ${req.ip} at ${new Date().toISOString()}`);
+    res.status(options.statusCode).send(options.message);
+  },
 });
 
 // Keep strict limiter for auth routes
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  max: 5,
-  message: 'Too many authentication attempts, please try again later.'
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 500,
+  message: 'Too many authentication attempts, please try again later.',
+  standardHeaders: true, // Return rate limit info in headers (Ratify spec)
+  legacyHeaders: false, // Disable older X-RateLimit-* headers
+  handler: (req, res, next, options) => {
+    const { used, limit } = req.rateLimit || { used: 'unknown', limit: 'unknown' };
+    // Log exceeded attempts with IP
+    console.log(`Rate limit exceeded for IP: ${req.ip} at ${new Date().toISOString()} Used: ${used}, Limit: ${limit}`);
+    res.status(options.statusCode).send(options.message);
+  },
 });
 
 app.use(cookieParser());

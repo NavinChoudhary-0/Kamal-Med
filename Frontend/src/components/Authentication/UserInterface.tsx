@@ -19,50 +19,34 @@ import {
   ChevronRight,
   LogOut,
 } from "lucide-react";
-import { useUser } from "../../Provider/UserContext";
+import { useAuth } from "../../Provider/UserAuthContext";
 import Order from "../../interfaces/Order";
 import Product from "../../interfaces/Product";
 import AddressInterface from "../AddressInterface";
+import UserInterface from "../../interfaces/User";
 
 const UserAccountPage = () => {
-  const { user, orders, setUser, loggedIn } = useUser();
+  const { user, orders, apiClient } = useAuth();
+  const [localUser, setLocalUser] = useState<UserInterface | null>(user);
   const [activeTab, setActiveTab] = useState("orders");
-  const [selectedOrder, setSelectedOrder] = useState(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [orderFilter, setOrderFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
-  const [showAddressForm, setShowAddressForm] = useState(false);
-  const [newAddress, setNewAddress] = useState({
-    address: "",
-    isDefault: false,
-    type: "",
-    city: "",
-    state: "",
-    postalCode: "",
-  });
 
-  const handleChange = (e: any) => {
-    const { name, value, type, checked } = e.target;
-    setNewAddress((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
-  };
+  useEffect(() => {
+    if (user) {
+      setLocalUser(user);
+    }
+  }, [user]);
 
-  const handleSubmit = (e: any) => {
-    e.preventDefault();
-    console.log("New Address:", newAddress);
-    // TODO: send to backend or update state
-    setShowAddressForm(false);
-    setNewAddress({
-      address: "",
-      isDefault: false,
-      type: "",
-      city: "",
-      state: "",
-      postalCode: "",
-    });
+  const handleSaveProfile = async () => {
+    try {
+      if (localUser !== null) await apiClient?.updateUser(localUser);
+      setIsEditingProfile(false);
+    } catch (err) {
+      console.error("Failed to update user:", err);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -95,15 +79,17 @@ const UserAccountPage = () => {
     }
   };
 
-  const filteredOrders = orders.filter((order: Order) => {
-    const matchesFilter = orderFilter === "all" || order.status === orderFilter;
-    const matchesSearch =
-      order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.products.some((item) =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    return matchesFilter && matchesSearch;
-  });
+  const filteredOrders =
+    orders?.filter((order: Order) => {
+      const matchesFilter =
+        orderFilter === "all" || order.status === orderFilter;
+      const matchesSearch =
+        order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.products.some((item) =>
+          item.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      return matchesFilter && matchesSearch;
+    }) || [];
 
   const handleReorder = (order: Order) => {
     console.log("Reordering:", order);
@@ -120,17 +106,6 @@ const UserAccountPage = () => {
     // Implement invoice download
   };
 
-  // if (isLoading) {
-  //   return (
-  //     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-  //       <div className="text-center">
-  //         <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-  //         <p className="text-gray-600">Loading your account...</p>
-  //       </div>
-  //     </div>
-  //   );
-  // }
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -145,12 +120,12 @@ const UserAccountPage = () => {
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-medium">
-                    {user.firstName[0]}
-                    {user.lastName[0]}
+                    {user?.firstName?.[0] ?? ""}
+                    {user?.lastName?.[0] ?? ""}
                   </span>
                 </div>
                 <span className="text-gray-700 font-medium">
-                  {user.firstName} {user.lastName}
+                  {user?.firstName ?? ""} {user?.lastName ?? ""}
                 </span>
               </div>
               <button className="text-gray-500 hover:text-gray-700 p-2">
@@ -169,24 +144,24 @@ const UserAccountPage = () => {
               <div className="text-center mb-6">
                 <div className="w-20 h-20 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
                   <span className="text-white text-2xl font-bold">
-                    {user.firstName[0]}
-                    {user.lastName[0]}
+                    {user?.firstName?.[0] ?? ""}
+                    {user?.lastName?.[0] ?? ""}
                   </span>
                 </div>
                 <h2 className="text-xl font-semibold text-gray-900">
-                  {user.firstName} {user.lastName}
+                  {user?.firstName ?? ""} {user?.lastName ?? ""}
                 </h2>
-                <p className="text-gray-600 text-sm">{user.email}</p>
+                <p className="text-gray-600 text-sm">{user?.email ?? ""}</p>
                 <div className="mt-4 flex justify-center space-x-4 text-sm">
                   <div className="text-center">
                     <div className="font-semibold text-gray-900">
-                      {user.totalOrders}
+                      {user?.totalOrders ?? 0}
                     </div>
                     <div className="text-gray-600">Orders</div>
                   </div>
                   <div className="text-center">
                     <div className="font-semibold text-gray-900">
-                      {user.loyaltyPoints}
+                      {user?.loyaltyPoints ?? 0}
                     </div>
                     <div className="text-gray-600">Points</div>
                   </div>
@@ -462,7 +437,11 @@ const UserAccountPage = () => {
                     </p>
                   </div>
                   <button
-                    onClick={() => setIsEditingProfile(!isEditingProfile)}
+                    onClick={() =>
+                      isEditingProfile
+                        ? handleSaveProfile()
+                        : setIsEditingProfile(true)
+                    }
                     className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     <Edit3 className="w-4 h-4" />
@@ -480,15 +459,15 @@ const UserAccountPage = () => {
                     {isEditingProfile ? (
                       <input
                         type="text"
-                        value={user.firstName}
+                        value={localUser?.firstName ?? ""}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          setUser({ ...user, firstName: e.target.value })
+                          setLocalUser(localUser ? { ...localUser, firstName: e.target.value } : null)
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
-                        {user.firstName}
+                        {localUser?.firstName ?? ""}
                       </div>
                     )}
                   </div>
@@ -500,15 +479,15 @@ const UserAccountPage = () => {
                     {isEditingProfile ? (
                       <input
                         type="text"
-                        value={user.lastName}
-                        onChange={(e) =>
-                          setUser({ ...user, lastName: e.target.value })
+                        value={localUser?.lastName ?? ""}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setLocalUser(localUser ? { ...localUser, lastName: e.target.value } : null)
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
-                        {user.lastName}
+                        {localUser?.lastName ?? ""}
                       </div>
                     )}
                   </div>
@@ -520,15 +499,15 @@ const UserAccountPage = () => {
                     {isEditingProfile ? (
                       <input
                         type="email"
-                        value={user.email}
+                        value={localUser?.email ?? ""}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                          setUser({ ...user, email: e.target.value })
+                          setLocalUser(localUser ? { ...localUser, email: e.target.value } : null)
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
-                        {user.email}
+                        {localUser?.email ?? ""}
                       </div>
                     )}
                   </div>
@@ -540,15 +519,15 @@ const UserAccountPage = () => {
                     {isEditingProfile ? (
                       <input
                         type="tel"
-                        value={user.contact || ""}
-                        onChange={(e) =>
-                          setUser({ ...user, contact: e.target.value })
+                        value={localUser?.contact || ""}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setLocalUser(localUser ? { ...localUser, contact: e.target.value } : null)
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
-                        {user.contact}
+                        {localUser?.contact || ""}
                       </div>
                     )}
                   </div>
@@ -561,19 +540,19 @@ const UserAccountPage = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-blue-600">
-                        {user.totalOrders}
+                        {localUser?.totalOrders ?? 0}
                       </div>
                       <div className="text-gray-600">Total Orders</div>
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-green-600">
-                        ${user.totalSpent.toFixed(2)}
+                        ${localUser?.totalSpent?.toFixed(2) ?? "0.00"}
                       </div>
                       <div className="text-gray-600">Total Spent</div>
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-purple-600">
-                        {user.loyaltyPoints}
+                        {localUser?.loyaltyPoints ?? 0}
                       </div>
                       <div className="text-gray-600">Loyalty Points</div>
                     </div>
@@ -582,7 +561,7 @@ const UserAccountPage = () => {
               </div>
             )}
 
-            {activeTab === "addresses" && <AddressInterface/>}
+            {activeTab === "addresses" && <AddressInterface />}
 
             {/* {activeTab === "payments" && (
               <div className="bg-white rounded-lg shadow-sm p-6">

@@ -20,21 +20,16 @@ export const UserAuthServicesProvider = ({ children }: ReactNodeInterface) => {
 
   // Initialize auth on app load
   useEffect(() => {
-    const accessToken = localStorage.getItem("accessToken");
-    const refreshToken = localStorage.getItem("refreshToken");
-
     setApiClient(
       new ApiClient({
         baseURL: BASE_URL,
-        accessToken,
-        refreshToken,
         dispatch,
       })
     );
   }, []);
 
   return (
-    <AuthContext.Provider value={{...state, apiClient}}>
+    <AuthContext.Provider value={{ ...state, apiClient }}>
       {state.loading ? (
         <div style={{ textAlign: "center", marginTop: "50px" }}>
           <h2>Loading...</h2>

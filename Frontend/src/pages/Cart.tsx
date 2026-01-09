@@ -9,7 +9,7 @@ import {
   Package,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useUser } from "../Provider/UserContext";
+import { useAuth } from "../Provider/UserAuthContext";
 
 // Mock interfaces and contexts for demonstration
 interface Product {
@@ -23,35 +23,7 @@ interface Product {
 
 // Mock cart context
 const useCart = () => {
-  const [cartItems, setCartItems] = useState<Product[]>([
-    {
-      id: "1",
-      name: "Wireless Headphones",
-      price: "₹2,999",
-      category: "electronics",
-      image:
-        "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200&h=200&fit=crop",
-      quantity: 2,
-    },
-    {
-      id: "2",
-      name: "Smart Watch",
-      price: "₹8,999",
-      category: "electronics",
-      image:
-        "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200&h=200&fit=crop",
-      quantity: 1,
-    },
-    {
-      id: "3",
-      name: "Coffee Mug",
-      price: "₹599",
-      category: "home",
-      image:
-        "https://images.unsplash.com/photo-1514228742587-6b1558fcf93a?w=200&h=200&fit=crop",
-      quantity: 3,
-    },
-  ]);
+  const [cartItems, setCartItems] = useState<Product[]>([]);
 
   const updateQuantity = (id: string, newQuantity: number) => {
     if (newQuantity <= 0) {
@@ -260,7 +232,7 @@ const LoginModal = () => {
 // Main Cart Screen Component
 const CartScreen = () => {
   const navigate = useNavigate();
-  const { loggedIn } = useUser();
+  const { isAuthenticated } = useAuth();
   const { cartItems, getTotalPrice, getTotalItems } = useCart();
 
   const onBack = () => {
@@ -404,7 +376,7 @@ const CartScreen = () => {
       </div>
 
       {/* Login Modal */}
-      {!loggedIn && <LoginModal />}
+      {!isAuthenticated && <LoginModal />}
 
       <style>{`
         @keyframes fade-in {

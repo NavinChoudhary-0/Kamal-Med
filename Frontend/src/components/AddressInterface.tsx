@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useUser } from "../Provider/UserContext";
+import { useAuth } from "../Provider/UserAuthContext";
 import {
   Edit3,
   Plus,
@@ -13,7 +13,7 @@ import {
 import Address from "../interfaces/Address";
 
 const AddressInterface = () => {
-  const { user } = useUser();
+  const { user, apiClient } = useAuth();
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
   const [newAddress, setNewAddress] = useState<Address>({
@@ -25,7 +25,7 @@ const AddressInterface = () => {
     postalCode: "",
     isDefault: false,
   });
-  const [address, setAddress] = useState<Address[]>(user.address);
+  const [address, setAddress] = useState<Address[]>(user?.address ?? []);
 
   const handleChange = (e: any) => {
     const { name, value, type, checked } = e.target;
@@ -50,27 +50,35 @@ const AddressInterface = () => {
     }
 
     if (editingAddress) {
-      // Update existing address
-      const updatedAddresses = address.map((addr) => {
-        if (addr.id === editingAddress.id) {
-          return { ...newAddress, id: editingAddress.id };
+      // Update user address in context
+      apiClient?.updateAddress(user?.id ?? "", newAddress).then((success) => {
+        if (success) {
+          // Update existing address
+          const updatedAddresses = address.map((addr) => {
+            if (addr.id === editingAddress.id) {
+              return { ...newAddress, id: editingAddress.id };
+            }
+            // If new address is set as default, remove default from others
+            return newAddress.isDefault ? { ...addr, isDefault: false } : addr;
+          });
+          setAddress(updatedAddresses);
+          setEditingAddress(null);
         }
-        // If new address is set as default, remove default from others
-        return newAddress.isDefault ? { ...addr, isDefault: false } : addr;
       });
-
-      setAddress(updatedAddresses);
-      setEditingAddress(null);
     } else {
       const addressToAdd = {
         ...newAddress,
         id: String(Date.now()),
       };
-
-      const updatedAddresses = newAddress.isDefault
-        ? address.map((addr) => ({ ...addr, isDefault: false }))
-        : address;
-      setAddress([...updatedAddresses, addressToAdd]);
+      // Add new address to context
+      apiClient?.addAddress(user?.id ?? "", addressToAdd).then((success) => {
+        if (success) {
+          const updatedAddresses = newAddress.isDefault
+            ? address.map((addr) => ({ ...addr, isDefault: false }))
+            : address;
+          setAddress([...updatedAddresses, addressToAdd]);
+        }
+      });
     }
 
     setNewAddress({

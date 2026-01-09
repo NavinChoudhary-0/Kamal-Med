@@ -8,7 +8,7 @@ interface User{
     address: Address[]
     totalOrders: number,
     loyaltyPoints: number,
-    totalSpent: number,
+    totalSpent: number
 }
 
 export default User;

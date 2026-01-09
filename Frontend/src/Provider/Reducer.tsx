@@ -48,10 +48,27 @@ const Reducer = (state: AuthState, action: AuthAction) => {
       };
     case "LOGIN_FAILURE":
       return {
-        ...state,
+        user: userInitialState,
+        orders: orderInitialState,
         loading: false,
         isAuthenticated: false,
         info: action.payload,
+      };
+    case "SET_ADDRESS":
+      return {
+        ...state,
+        ...(state.user && {
+          user: {
+            ...state.user,
+            address: state.user.address.some(
+              (addr) => addr.id === action.payload.id
+            )
+              ? state.user.address.map((addr) =>
+                  addr.id === action.payload.id ? action.payload : addr
+                )
+              : [...state.user.address, action.payload],
+          },
+        }),
       };
     case "LOGOUT":
       return {
@@ -67,7 +84,7 @@ const Reducer = (state: AuthState, action: AuthAction) => {
         ...state,
         user: action.payload,
       };
-    case "TOKEN_VERIFITED":
+    case "TOKEN_VERIFIED":
       return {
         ...state,
         isAuthenticated: true,

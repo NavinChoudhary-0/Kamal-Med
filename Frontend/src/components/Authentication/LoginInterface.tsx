@@ -21,9 +21,9 @@ import UserInterface from "../../interfaces/User";
 import Order from "../../interfaces/Order";
 
 interface UserData {
-  message: string,
-  user: UserInterface,
-  orders: Order[]
+  message: string;
+  user: UserInterface;
+  orders: Order[];
 }
 interface JwtPayload {
   given_name: string;
@@ -38,7 +38,7 @@ const LoginInterface = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [successMessage, setSuccessMessage] = useState("");
-  const {user, apiClient} = useAuth();
+  const { user, apiClient } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -163,22 +163,22 @@ const LoginInterface = () => {
   };
 
   const handleSubmit = async (payload: any) => {
-    console.log("Google auth = ", payload);
     if (!payload.sub && !validateForm()) return;
 
     setIsLoading(true);
     setSuccessMessage("");
 
     try {
-      const url = isLogin && !payload.sub ? URL_TO_CHECK_USER_DATA : URL_TO_ADD_USER;
-      const response  = await apiClient?.login(url, payload.sub? payload : formData);
+      const response = await (isLogin && !payload.sub
+        ? apiClient?.login(formData.email, formData.password)
+        : apiClient?.createNewUser(payload.sub ? payload : formData));
       if (!response?.success) {
         throw new Error(response?.error);
       }
       navigate("/products");
     } catch (error) {
       console.log(error);
-      setErrors({ submit: String(error)  });
+      setErrors({ submit: String(error) });
     } finally {
       setIsLoading(false);
     }

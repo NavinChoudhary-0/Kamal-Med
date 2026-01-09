@@ -2,8 +2,10 @@ const router = require("express").Router();
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const redis = require("redis");
+const { User, Address } = require("../models");
 const { getOrderDetails, getAddress, formatUserResponse } = require("./user");
 
+const refreshTokenExpiry = 7 * 24 * 60 * 60; // 7 days in seconds
 const SALT_ROUND = process.env.SALT_ROUND || 10;
 const JWT_ACCESS_SECRET =
   process.env.JWT_ACCESS_SECRET || "your-access-secret-key";
@@ -17,11 +19,9 @@ const redisClient = redis.createClient({
   host: process.env.REDIS_HOST || "localhost",
   port: process.env.REDIS_PORT || 6379,
   password: process.env.REDIS_PASSWORD || undefined,
-  // For Redis Cloud or other managed services
   url: process.env.REDIS_URL || undefined,
 });
 
-// Handle Redis connection
 redisClient.on("error", (err) => {
   console.error("Redis Client Error:", err);
 });
@@ -40,34 +40,32 @@ redisClient.on("connect", () => {
 })();
 
 // Helper functions
-const generateAccessToken = (user) => {
+const generateAccessToken = (userId) => {
   return jwt.sign(
     {
-      userId: user.id,
-      email: user.email,
+      userId: userId,
     },
     JWT_ACCESS_SECRET,
     { expiresIn: ACCESS_TOKEN_EXPIRY }
   );
 };
 
-const generateRefreshToken = async (user) => {
-  const token = jwt.sign({ userId: user.id }, JWT_REFRESH_SECRET, {
+const generateRefreshToken = async (userId) => {
+  const token = jwt.sign({ userId: userId }, JWT_REFRESH_SECRET, {
     expiresIn: REFRESH_TOKEN_EXPIRY,
   });
 
   // Store refresh token in Redis with expiration
   const tokenKey = `refresh_token:${token}`;
   const tokenData = {
-    userId: user.id,
-    email: user.email,
+    userId: userId,
     createdAt: new Date().toISOString(),
   };
 
   try {
     await redisClient.setEx(
       tokenKey,
-      7 * 24 * 60 * 60, // 7 days in seconds
+      refreshTokenExpiry,
       JSON.stringify(tokenData)
     );
   } catch (error) {
@@ -85,19 +83,14 @@ const validateRefreshToken = async (token) => {
     const tokenData = await redisClient.get(tokenKey);
     return tokenData ? JSON.parse(tokenData) : null;
   } catch (error) {
-    console.error("Error validating refresh token in Redis:", error);
+    console.error("Error validating refresh token from Redis:", error);
     return null;
   }
 };
 
 // Helper function to remove refresh token from Redis
 const removeRefreshToken = async (token) => {
-  const tokenKey = `refresh_token:${token}`;
-  try {
-    await redisClient.del(tokenKey);
-  } catch (error) {
-    console.error("Error removing refresh token from Redis:", error);
-  }
+  await redisClient.del(`refresh_token:${token}`);
 };
 
 // Helper function to remove all refresh tokens for a user
@@ -120,6 +113,110 @@ const removeAllUserRefreshTokens = async (userId) => {
   }
 };
 
+const getUser = async (userId) => {
+  const user = await User.findByPk(userId, {
+    attributes: ["id", "firstName", "lastName", "email", "contact"],
+  });
+  return user ? user.toJSON() : null;
+};
+
+router.post("/checkUserCred", async (req, res) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) {
+      return res.status(401).json({ error: "Refresh token required" });
+    }
+    const tokenData = await validateRefreshToken(refreshToken);
+    if (!tokenData) {
+      clearRefreshToken(res, refreshToken);
+      return res.status(403).json({ error: "Invalid refresh token" });
+    }
+    await removeRefreshToken(refreshToken);
+    const [user, address, orders, newRefreshToken] = await Promise.all([
+      getUser(tokenData.userId),
+      getAddress(tokenData.userId),
+      getOrderDetails(tokenData.userId),
+      generateRefreshToken(tokenData.userId),
+    ]);
+    const accessToken = generateAccessToken(tokenData.userId);
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: refreshTokenExpiry,
+    });
+
+    return res.status(200).json({
+      message: "Valid credentials",
+      user: formatUserResponse(user, address),
+      orders,
+      accessToken,
+    });
+  } catch (error) {
+    console.error("Error checking user credentials:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/updateAddress", async (req, res) => {
+  try {
+    const { address } = req.body;
+    const userAddress = await Address.findByPk(address.id);
+    if (!userAddress) {
+      return res.status(404).json({ error: "Address not found" });
+    }
+    userAddress.type = address.type;
+    userAddress.isDefault = address.isDefault;
+    userAddress.address = address.address;
+    userAddress.city = address.city;
+    userAddress.state = address.state;
+    userAddress.postalCode = address.postalCode;
+    await userAddress.save();
+    return res.status(200).json({ message: "Address updated successfully" });
+  } catch (error) {
+    console.error("Error updating address:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/addAddress", async (req, res) => {
+  try {
+    const { userId, address } = req.body;
+    const newAddress = await Address.create({
+      userId: userId,
+      type: address.type,
+      isDefault: address.isDefault,
+      address: address.address,
+      city: address.city,
+      state: address.state,
+      postalCode: address.postalCode,
+    });
+    return res.status(200).json({ message: "Address added successfully" });
+  } catch (error) {
+    console.error("Error adding address:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/userInfoUpdate", async (req, res) => {
+  try {
+    const { userId, firstName, lastName, email, contact } = req.body;
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    user.firstName = firstName;
+    user.lastName = lastName;
+    user.email = email;
+    user.contact = contact;
+    await user.save();
+    return res.status(200).json({ message: "User updated successfully" });
+  } catch (error) {
+    console.error("Error updating user:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 const verifyAccessToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
@@ -131,8 +228,11 @@ const verifyAccessToken = (req, res, next) => {
   jwt.verify(token, JWT_ACCESS_SECRET, (err, decoded) => {
     if (err) {
       if (err.name === "TokenExpiredError") {
-        return res.status(401).json({ error: "Access token expired" });
+        return res
+          .status(401)
+          .json({ error: "Access token expired", isTokenExpired: true });
       }
+      res.clearCookie("refreshToken");
       return res.status(403).json({ error: "Invalid access token" });
     }
     req.user = decoded;
@@ -142,41 +242,66 @@ const verifyAccessToken = (req, res, next) => {
 
 router.post("/addUser", async (req, res) => {
   try {
-    // Generate tokens
-    const accessToken = generateAccessToken(user);
-    const refreshToken = await generateRefreshToken(user);
-
     if (req.body.sub) {
-      const existingUser = await User.findOne({
+      let user = await User.findOne({
         where: { sub: req.body.sub },
-        attributes: ["id", "firstName", "lastName", "email", "contact"],
+        attributes: [
+          "id",
+          "firstName",
+          "lastName",
+          "email",
+          "contact",
+          "password",
+        ],
       });
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production", // HTTPS in production
-        sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
-      console.log(existingUser);
-      if (existingUser) {
-        const address = await getAddress(existingUser.id);
-        const orders = await getOrderDetails(existingUser.id);
-
-        return res.status(200).json({
-          message: "Successfully logged in with Google",
-          user: formatUserResponse(existingUser, address),
-          orders: orders,
-          accessToken: accessToken,
+      if (!user) {
+        user = await User.findOne({
+          where: { email: req.body.email },
+          attributes: [
+            "id",
+            "firstName",
+            "lastName",
+            "email",
+            "contact",
+            "password",
+          ],
         });
-      } else {
-        const newUserAdded = await User.create(req.body);
-        return res.status(201).json({
-          message: "New user created",
-          user: formatUserResponse(newUserAdded, []),
-          orders: [],
-          accessToken: accessToken,
+        if (user) {
+          user.sub = req.body.sub;
+          await user.save();
+        }
+      }
+      if (!user) {
+        user = await User.create({
+          sub: req.body.sub,
+          firstName: req.body.firstName,
+          lastName: req.body.lastName,
+          email: req.body.email,
+          contact: req.body.contact,
         });
       }
+
+      const [address, orders, refreshToken] = await Promise.all([
+        getAddress(user.id),
+        getOrderDetails(user.id),
+        generateRefreshToken(user.id),
+      ]);
+
+      const accessToken = generateAccessToken(user.id);
+
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
+      return res.status(200).json({
+        message: "Successfully logged in with Google",
+        user: formatUserResponse(user, address),
+        orders,
+        accessToken,
+      });
     } else {
       if (!req.body.email) {
         return res.status(400).json({ error: "Email is required" });
@@ -188,16 +313,24 @@ router.post("/addUser", async (req, res) => {
       if (existingEmail) {
         return res.status(409).json({ error: "Email already in use" });
       } else {
+        let user = await User.create({
+          firstName: req.body.firstName,
+          lastName: req.body.lastName,
+          email: req.body.email,
+          contact: req.body.contact,
+          password: await bcrypt.hash(req.body.password, parseInt(SALT_ROUND)),
+        });
+        const accessToken = generateAccessToken(user.id);
+        const refreshToken = await generateRefreshToken(user.id);
         res.cookie("refreshToken", refreshToken, {
           httpOnly: true,
-          secure: process.env.NODE_ENV === "production", // HTTPS in production
+          secure: process.env.NODE_ENV === "production",
           sameSite: "strict",
-          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+          maxAge: 7 * 24 * 60 * 60 * 1000,
         });
-        const newUserAdded = await User.create(req.body);
         return res.status(201).json({
           message: "New user created",
-          user: newUserAdded,
+          user: formatUserResponse(user.toJSON(), []),
           orders: [],
           accessToken: accessToken,
         });
@@ -209,20 +342,20 @@ router.post("/addUser", async (req, res) => {
 });
 
 // Login endpoint
-router.post("/auth/login", async (req, res) => {
+router.post("/login", async (req, res) => {
   try {
+    console.log(req.body);
     const { email, password } = req.body;
 
-    const users = await User.findAll({ where: { email: email } });
-    let user = users.map((u) => u.toJSON());
-    if (user.length === 0) {
+    let user = await User.findOne({ where: { email: email } });
+    if (!user) {
       return res.status(404).json({ message: "Email not present" });
     }
-    user = user[0];
+    user = user.toJSON();
     if (!user.password && user.sub) {
       return res.status(400).json({
         message:
-          "This account is linked with Google. Please login using Google, or set up a password to continue.",
+          "This account is linked with Google. Please login using Google to continue.",
       });
     }
 
@@ -232,9 +365,13 @@ router.post("/auth/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    // Generate tokens
+    const [refreshToken, address, orders] = await Promise.all([
+      generateRefreshToken(user.id),
+      getAddress(user.id),
+      getOrderDetails(user.id),
+    ]);
+
     const accessToken = generateAccessToken(user);
-    const refreshToken = await generateRefreshToken(user);
 
     // Set refresh token as httpOnly cookie
     res.cookie("refreshToken", refreshToken, {
@@ -244,8 +381,6 @@ router.post("/auth/login", async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    const address = await getAddress(user.id);
-    const orders = await getOrderDetails(user.id);
     // Send user data and access token
     res.json({
       success: true,
@@ -260,7 +395,7 @@ router.post("/auth/login", async (req, res) => {
 });
 
 // Refresh token endpoint
-router.post("/auth/refresh", async (req, res) => {
+router.post("/refresh", async (req, res) => {
   try {
     const { refreshToken } = req.cookies;
 
@@ -271,30 +406,29 @@ router.post("/auth/refresh", async (req, res) => {
     // Check if refresh token exists in Redis
     const tokenData = await validateRefreshToken(refreshToken);
     if (!tokenData) {
+      await clearRefreshToken(res, refreshToken);
       return res.status(403).json({ error: "Invalid refresh token" });
     }
 
     // Verify refresh token JWT
     jwt.verify(refreshToken, JWT_REFRESH_SECRET, async (err, decoded) => {
       if (err) {
-        await removeRefreshToken(refreshToken); // Remove invalid token
+        await clearRefreshToken(res, refreshToken);
         return res.status(403).json({ error: "Invalid refresh token" });
       }
 
       // Find user (replace with database query)
-      const user = users.find((u) => u.id === decoded.userId);
+      const user = await User.findByPk(decoded.userId);
       if (!user) {
-        await removeRefreshToken(refreshToken);
+        await clearRefreshToken(res, refreshToken);
         return res.status(403).json({ error: "User not found" });
       }
 
       try {
+        await removeRefreshToken(refreshToken);
         // Generate new tokens
         const newAccessToken = generateAccessToken(user);
         const newRefreshToken = await generateRefreshToken(user);
-
-        // Remove old refresh token and the new one is already stored
-        await removeRefreshToken(refreshToken);
 
         // Set new refresh token cookie
         res.cookie("refreshToken", newRefreshToken, {
@@ -304,16 +438,9 @@ router.post("/auth/refresh", async (req, res) => {
           maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
-        // Send new access token and user data
         res.json({
           success: true,
           accessToken: newAccessToken,
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role,
-          },
         });
       } catch (error) {
         console.error("Error generating new tokens:", error);
@@ -326,8 +453,13 @@ router.post("/auth/refresh", async (req, res) => {
   }
 });
 
+const clearRefreshToken = async (res, token) => {
+  res.clearCookie("refreshToken");
+  await removeRefreshToken(token);
+};
+
 // Logout endpoint
-router.post("/auth/logout", async (req, res) => {
+router.post("/logout", async (req, res) => {
   const { refreshToken } = req.cookies;
 
   if (refreshToken) {
@@ -347,8 +479,8 @@ router.get("/api/profile", verifyAccessToken, (req, res) => {
 });
 
 // Check auth status endpoint
-router.get("/auth/me", verifyAccessToken, (req, res) => {
-  const user = users.find((u) => u.id === req.user.userId);
+router.get("/me", verifyAccessToken, (req, res) => {
+  const user = User.findByPk(req.user.userId);
   res.json({
     success: true,
     user: {

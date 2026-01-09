@@ -8,6 +8,7 @@ const {
 const getAddress = async (userId) => {
   try {
     const address = await Address.findAll({ where: { userId: userId } });
+    console.log(address)
     return address;
   } catch (error) {
     console.error("Error fetching address:", error);

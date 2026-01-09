@@ -1,35 +1,32 @@
-import { URL_FOR_TOKEN_REFRESH, URL_FOR_LOGIN } from "../config/ApiURL";
+import {
+  URL_FOR_TOKEN_REFRESH,
+  URL_FOR_LOGIN,
+  URL_TO_ADD_USER,
+  URL_TO_CHECK_USER_DATA,
+} from "../config/ApiURL";
 import { Dispatch } from "react";
 import {
   ApiClientInterface,
-  UserInfoStoredInLocalStorage,
   AuthAction,
   HeaderOptionsInterface,
 } from "../types/index";
+import User from "../interfaces/User";
+import Address from "../interfaces/Address";
 
 const AuthURLs = [URL_FOR_TOKEN_REFRESH, URL_FOR_LOGIN];
 
 class ApiClient {
   baseURL: string;
   accessToken: string | null;
-  refreshToken: string | null;
-  userInfo: UserInfoStoredInLocalStorage | null = null;
   disptach: Dispatch<AuthAction>;
   isRefreshing: boolean = false;
   failedQueue: Function[] = [];
 
-  constructor({
-    baseURL,
-    accessToken,
-    refreshToken,
-    dispatch,
-  }: ApiClientInterface) {
+  constructor({ baseURL, dispatch }: ApiClientInterface) {
     this.baseURL = baseURL;
-    this.accessToken = accessToken;
-    this.refreshToken = refreshToken;
+    this.accessToken = null;
     this.disptach = dispatch;
-    if (this.accessToken && this.refreshToken) this.verifyAccessToken();
-    else dispatch({ type: "USER_NOT_PRESENT" });
+    this.verifyAccessToken();
   }
 
   // Main request method with automatic token refresh
@@ -55,7 +52,7 @@ class ApiClient {
       },
       credentials: "include",
     };
-
+    console.log("Making request to:", url, "with config:", config);
     try {
       let response = await fetch(url, config);
 
@@ -103,33 +100,29 @@ class ApiClient {
           data,
           status: response.status,
           headers: response.headers,
-        }
-      }else{
-          return {
-            success: false,
-            data,
-            status: response.status,
-            headers: response.headers,
-          }
+        };
+      } else {
+        return {
+          success: false,
+          data,
+          status: response.status,
+          headers: response.headers,
+        };
       }
     } catch (error) {
       console.error("Error parsing response:", error);
       throw error;
     }
   }
+
   async verifyAccessToken() {
     try {
-      const response  = await this.request("/auth/verify", {
+      const response = await this.request(URL_TO_CHECK_USER_DATA, {
         method: "POST",
-        body: JSON.stringify({
-          accessToken: this.accessToken,
-          refreshToken: this.refreshToken,
-        }),
       });
 
       if (response.success) {
         const data = response.data;
-        this.userInfo = data.user;
         this.disptach({
           type: "LOGIN_SUCCESS",
           payload: { user: data.user, orders: data.orders },
@@ -154,6 +147,79 @@ class ApiClient {
     }
   }
 
+  async addAddress(userId: string, address: Address) {
+    try {
+      const response = await this.request("/auth/addAddress", {
+        method: "POST",
+        body: JSON.stringify({
+          userId,
+          address,
+        }),
+      });
+      if (response.success) {
+        const address: Address = response.data.address;
+        this.disptach({
+          type: "SET_ADDRESS",
+          payload: address,
+        });
+        return true;
+      } else {
+        console.error("Failed to add address:", response.data.error);
+        throw new Error(response.data.error || "Failed to add address");
+      }
+    } catch (error) {
+      console.error("Error adding address:", error);
+      return false;
+    }
+  }
+  async updateAddress(userId: string, address: Address) {
+    try {
+      const response = await this.request("/auth/addressUpdate", {
+        method: "POST",
+        body: JSON.stringify({
+          userId,
+          address,
+        }),
+      });
+      if (response.success) {
+        const address: Address = response.data.address;
+        this.disptach({
+          type: "SET_ADDRESS",
+          payload: address,
+        });
+        return true;
+      } else {
+        console.error("Failed to update address:", response.data.error);
+        throw new Error(response.data.error || "Failed to update address");
+      }
+    } catch (error) {
+      console.error("Error updating address:", error);
+      return false;
+    }
+  }
+
+  async updateUser(user: User) {
+    try {
+      const response = await this.request("/auth/userInfoUpdate", {
+        method: "POST",
+        body: JSON.stringify(user),
+      });
+      if (response.success) {
+        const user: User = response.data.user;
+        this.disptach({
+          type: "SET_USER",
+          payload: user,
+        });
+        return true;
+      } else {
+        console.error("Failed to update user:", response.data.error);
+        throw new Error(response.data.error || "Failed to update user");
+      }
+    } catch (error) {
+      console.error("Error updating user:", error);
+      return false;
+    }
+  }
   // Refresh token and retry logic
   async handleTokenRefresh() {
     if (this.isRefreshing) {
@@ -166,24 +232,14 @@ class ApiClient {
     this.isRefreshing = true;
     let tokenVerified = false;
     try {
-      const response = await this.request("/auth/refresh", {
+      const response = await this.request(URL_FOR_TOKEN_REFRESH, {
         method: "POST",
-        body: JSON.stringify({
-          accessToken: this.accessToken,
-          refreshToken: this.refreshToken,
-        }),
       });
 
       if (response.success) {
-        const data = response.data;
-        localStorage.setItem("accessToken", data.accessToken);
-        localStorage.setItem("refreshToken", data.refreshToken);
-        localStorage.setItem("user", JSON.stringify(data.user));
-        this.accessToken = data.accessToken;
-        this.refreshToken = data.refreshToken;
-        this.userInfo = data.user;
+        this.accessToken = response.data.accessToken;
         this.disptach({
-          type: "TOKEN_VERIFITED",
+          type: "TOKEN_VERIFIED",
         });
         tokenVerified = true;
       } else {
@@ -202,11 +258,6 @@ class ApiClient {
 
   handleLogout() {
     this.accessToken = null;
-    this.refreshToken = null;
-    this.userInfo = null;
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("user");
     this.disptach({ type: "LOGOUT" });
   }
 
@@ -223,11 +274,30 @@ class ApiClient {
       body: JSON.stringify(data),
     });
   }
-  async createNewUser(data: FormData){
-    return this.request("/users/addUser", {
-      method: "POST",
-      body: data,
-    })
+  async createNewUser(data: FormData) {
+    try {
+      console.log("Creating new user with data:", data);
+      const response = await this.request(URL_TO_ADD_USER, {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      if (response.success) {
+        localStorage.setItem("accessToken", response.data.accessToken);
+        localStorage.setItem("refreshToken", response.data.refreshToken);
+        localStorage.setItem("user", JSON.stringify(response.data.user));
+        this.disptach({
+          type: "SET_USER",
+          payload: response.data.user,
+        });
+        return { success: true };
+      } else {
+        console.error("Failed to create user:", response.data.error);
+        throw new Error(response.data.error || "Failed to create user");
+      }
+    } catch (error) {
+      console.error("Error creating user:", error);
+      return { success: false, error: String(error) };
+    }
   }
   // Login function
   async login(
@@ -235,15 +305,12 @@ class ApiClient {
     password: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await this.request("/auth/login", {
+      const response = await this.request(URL_FOR_LOGIN, {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
 
       if (response.success) {
-        localStorage.setItem("accessToken", response.data.accessToken);
-        localStorage.setItem("user", JSON.stringify(response.data.user));
-
         this.disptach({ type: "LOGIN_SUCCESS", payload: response.data });
         return { success: true };
       } else {
@@ -251,10 +318,14 @@ class ApiClient {
           type: "LOGIN_FAILURE",
           payload: "Login failed",
         });
-        return { success: false, error: "Login Failed" };
+        return {
+          success: false,
+          error: response.data.message || "Login Failed",
+        };
       }
     } catch (error) {
       const errorMessage = "Network error. Please check your connection.";
+      console.log("eogn");
       this.disptach({ type: "LOGIN_FAILURE", payload: errorMessage });
       return { success: false, error: errorMessage };
     }
